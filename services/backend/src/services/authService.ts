@@ -5,6 +5,7 @@ import db from '../db';
 import { User,UserRow } from '../types/user';
 import jwtUtils from '../utils/jwt';
 import ejs from 'ejs';
+import bcrypt from 'bcrypt';
 
 const RESET_TTL = 1000 * 60 * 60;         // 1h
 const INVITE_TTL = 1000 * 60 * 60 * 24 * 7; // 7d
@@ -18,12 +19,14 @@ class AuthService {
       .first();
     if (existing) throw new Error('User already exists with that username or email');
     // create invite token
+    const hashed_password = await bcrypt.hash(user.password, 10);
+
     const invite_token = crypto.randomBytes(6).toString('hex');
     const invite_token_expires = new Date(Date.now() + INVITE_TTL);
     await db<UserRow>('users')
       .insert({
         username: user.username,
-        password: user.password,
+        password: hashed_password,
         email: user.email,
         first_name: user.first_name,
         last_name:  user.last_name,
@@ -82,7 +85,8 @@ class AuthService {
       .andWhere('activated', true)
       .first();
     if (!user) throw new Error('Invalid username or not activated');
-    if (password != user.password) throw new Error('Invalid password');
+    const isCorrect = await bcrypt.compare(password, user.password);
+    if (!isCorrect) throw new Error('Invalid password');
     return user;
   }
 
@@ -127,17 +131,19 @@ class AuthService {
       .andWhere('reset_password_expires', '>', new Date())
       .first();
     if (!row) throw new Error('Invalid or expired reset token');
-
+    
+    const hashed_password = await bcrypt.hash(newPassword, 10);
     await db('users')
       .where({ id: row.id })
       .update({
-        password: newPassword,
+        password: hashed_password,
         reset_password_token: null,
         reset_password_expires: null
       });
   }
 
   static async setPassword(token: string, newPassword: string) {
+    const hashed_password = await bcrypt.hash(newPassword, 10);
     const row = await db<UserRow>('users')
       .where('invite_token', token)
       .andWhere('invite_token_expires', '>', new Date())
@@ -146,7 +152,7 @@ class AuthService {
 
     await db('users')
       .update({
-        password: newPassword,
+        password: hashed_password,
         invite_token: null,
         invite_token_expires: null,
         activated: true
