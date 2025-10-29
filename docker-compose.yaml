@@ -42,9 +42,12 @@ services:
     command: sh -c "npx knex --knexfile src/knexfile.ts migrate:latest && cd dist/src/ && node index.js"
     # command to seed data: npx knex seed:run --knexfile src/knexfile.ts
     
-  #add a postgres service
+  # add a postgres service
   postgres:
-    image: postgres:latest
+    # Use the Postgres image that matches the data directory version.
+    # The existing volume contains data initialized by PostgreSQL 17,
+    # so use postgres:17 to be compatible.
+    image: postgres:17
     container_name: postgres
     environment:
       POSTGRES_USER: user
