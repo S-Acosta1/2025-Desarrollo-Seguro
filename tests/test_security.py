@@ -66,3 +66,40 @@ def test_login(setup_create_user):
     auth_token = response.json()["token"]
     assert auth_token
 
+
+def test_template_injection():
+    i = random.randint(1000000, 1999999)
+    username = f'ti_user{i}'
+    email = f'{username}@test.com'
+    password = 'password'
+    payload_name = '<%= 7*7 %>'
+    salida = requests.post("http://localhost:5000/users",
+                        data={
+                            "username": username,
+                            "password": password,
+                            "email": email,
+                            "first_name": payload_name,
+                            "last_name": f'{username}son'
+                        })
+    assert salida.status_code == 201
+
+    mail = get_last_email_body()
+    assert mail is not None, "No se recibió correo en MailHog"
+    assert '&lt;%= 7*7 %&gt;' in mail, "Payload no aparece escapado — posible vulnerabilidad"
+
+
+def test_invoices_SQLi(setup_create_user):
+    username, password = setup_create_user
+    login_resp = requests.post("http://localhost:5000/auth/login", json={"username": username, "password": password})
+    login_resp.raise_for_status()
+    token = login_resp.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    malicious_operator = "; DROP TABLE users; --"
+    resp = requests.get("http://localhost:5000/invoices", headers=headers, params={"status": "paid", "operator": malicious_operator})
+
+    assert resp.status_code != 200
+    if resp.headers.get('Content-Type', '').startswith('application/json'):
+        data = resp.json()
+        assert isinstance(data, dict) and data.get("message")
+
