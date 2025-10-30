@@ -72,10 +72,19 @@ const createUser = async (req: Request, res: Response, next: NextFunction) => {
 };
 
 const updateUser = async (req: Request, res: Response, next: NextFunction) => {
-  const userId = req.params.id;
+  const idUsuarioAEditar = req.params.id;
+  const idUsuarioLogueado = (req as any).user.id;
   const { username, password, email, first_name, last_name } = req.body;
+  
   try {
-  const user: User = {
+    if (idUsuarioAEditar !== idUsuarioLogueado.toString()) {
+      return res.status(403).json({ 
+        message: 'Acceso denegado: Solo puedes editar tu propio perfil'
+      });
+    }
+
+    const user: User = {
+      id: idUsuarioAEditar,
       username,
       password,
       email,
@@ -83,7 +92,7 @@ const updateUser = async (req: Request, res: Response, next: NextFunction) => {
       last_name
     };
     const userDB = await AuthService.updateUser(user);
-      res.status(201).json(userDB);
+    res.status(200).json(userDB);
   } catch (err) {
     next(err);
   }

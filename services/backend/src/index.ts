@@ -6,6 +6,7 @@ import { setupSwagger } from './swagger'
 
 import userRoutes from './routes/user.routes';
 import authRoutes from './routes/auth.routes';
+import routes from './controllers/authController';
 
 import clinicalHistoryRoutes from './routes/clinicalhistory.routes';
 import invoiceRoutes from './routes/invoices.routes';
@@ -26,15 +27,15 @@ app.use(cors())
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-setupSwagger(app);
-
-app.use('/users', userRoutes);
 app.use('/auth', authRoutes);
+app.post('/users', routes.createUser);
 
 // Protect everything below
 app.use(authMiddleware);
 
+setupSwagger(app);  // ⬅️ Swagger protegido
 
+app.use('/users', userRoutes);
 app.use('/clinical-history', clinicalHistoryRoutes);
 app.use('/invoices', invoiceRoutes);
 
