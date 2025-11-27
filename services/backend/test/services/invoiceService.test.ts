@@ -23,7 +23,7 @@ describe('AuthService.generateJwt', () => {
   it('listInvoices', async () => {
     const userId = 'user123';
     const state = 'paid';
-    const operator = 'eq';
+  const operator = '=';
     const mockInvoices: Invoice[] = [
       { id: 'inv1', userId, amount: 100, dueDate: new Date(), status: 'paid' },
       { id: 'inv2', userId, amount: 200, dueDate: new Date(), status: 'paid' }
@@ -40,7 +40,7 @@ describe('AuthService.generateJwt', () => {
     const invoices = await InvoiceService.list(userId, state, operator);
 
     expect(mockedDb().where).toHaveBeenCalledWith({ userId });
-    expect(mockedDb().andWhereRaw).toHaveBeenCalledWith(" status " + operator +" 'paid'");
+    expect(mockedDb().andWhereRaw).not.toHaveBeenCalled();
     expect(mockedDb().select).toHaveBeenCalled();
     expect(invoices).toEqual(mockInvoices);
   });

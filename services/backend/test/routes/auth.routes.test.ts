@@ -3,7 +3,6 @@
 import request from 'supertest';
 import express from 'express';
 import authRoutes from '../../src/routes/auth.routes';
-import jwtUtils from '../../src/utils/jwt';
 import AuthService from '../../src/services/authService';
 
 jest.mock('../../src/services/authService');
@@ -19,7 +18,7 @@ describe('Auth Routes', () => {
     });
 
     it('/login', async () => {
-        const jwtSecret = jwtUtils.generateToken('1');
+        const jwtSecret = 'test-jwt-secret-token';
         mockedAuthService.authenticate.mockResolvedValue({ id: '1', username: 'testuser' } as any);
         mockedAuthService.generateJwt.mockReturnValue(jwtSecret);
 

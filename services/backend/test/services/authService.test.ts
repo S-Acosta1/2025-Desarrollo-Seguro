@@ -1,4 +1,8 @@
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
+
+// Ensure JWT secret is set for tests so jwt utils can sign/verify tokens
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'secreto_super_seguro';
 import nodemailer from 'nodemailer';
 
 import AuthService from '../../src/services/authService';
@@ -53,10 +57,10 @@ describe('AuthService.generateJwt', () => {
     // Call the method to test
     await AuthService.createUser(user);
 
-    // Verify the database calls
-    expect(insertChain.insert).toHaveBeenCalledWith({
+    // Verify the database calls (password should be hashed)
+    const expectedInsert = expect.objectContaining({
       email: user.email,
-      password: user.password,
+      password: expect.any(String),
       first_name: user.first_name,
       last_name: user.last_name,
       username: user.username,
@@ -64,6 +68,7 @@ describe('AuthService.generateJwt', () => {
       invite_token: expect.any(String),
       invite_token_expires: expect.any(Date)
     });
+    expect(insertChain.insert).toHaveBeenCalledWith(expectedInsert);
 
     expect(nodemailer.createTransport).toHaveBeenCalled();
     expect(nodemailer.createTransport().sendMail).toHaveBeenCalledWith(expect.objectContaining({
@@ -74,6 +79,41 @@ describe('AuthService.generateJwt', () => {
     }));
   }
   );
+
+  // Simple test: verifica mitigación de Template Injection en el email de activación
+  it('createUser - template injection should be escaped in email', async () => {
+    const user = {
+      id: 'user-tpl-1',
+      email: 'tpltest@test.com',
+      password: 'password123',
+      first_name: '<%= 7*7 %>',
+      last_name: '<%= 7*7 %>',
+      username: 'tpluser1',
+    } as User;
+
+    // mock no user exists
+    const selectChain = {
+      where: jest.fn().mockReturnThis(),
+      orWhere: jest.fn().mockReturnThis(),
+      first: jest.fn().mockResolvedValue(null)
+    };
+    // Mock the database insert
+    const insertChain = {
+      returning: jest.fn().mockResolvedValue([user]),
+      insert: jest.fn().mockReturnThis()
+    };
+    mockedDb
+      .mockReturnValueOnce(selectChain as any)
+      .mockReturnValueOnce(insertChain as any);
+
+    // Call the method to test
+    await AuthService.createUser(user);
+
+    const calls = (nodemailer.createTransport().sendMail as jest.Mock).mock.calls;
+    const sendMailCall = calls[calls.length - 1][0];
+    // esperamos que la sintaxis EJS venga escapada en el HTML del correo
+    expect(sendMailCall.html).toContain('&lt;%= 7*7 %&gt;');
+  })
 
   it('createUser already exist', async () => {
     const user  = {
@@ -148,10 +188,11 @@ describe('AuthService.generateJwt', () => {
     const password = 'password123';
 
     // Mock the database get user
+    const hashed = await bcrypt.hash(password, 10);
     const getUserChain = {
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
-      first: jest.fn().mockResolvedValue({password}),
+      first: jest.fn().mockResolvedValue({password: hashed}),
     };
     // Mock the database update password
     mockedDb.mockReturnValueOnce(getUserChain as any);
@@ -262,11 +303,11 @@ describe('AuthService.generateJwt', () => {
     // Call the method to test
     await AuthService.resetPassword(token, newPassword);
     expect(getUserChain.where).toHaveBeenCalledWith('reset_password_token', token);
-    expect(updateChain.update).toHaveBeenCalledWith({
-      password: newPassword,
+    expect(updateChain.update).toHaveBeenCalledWith(expect.objectContaining({
+      password: expect.any(String),
       reset_password_token: null,
       reset_password_expires: null
-    });
+    }));
   });
 
   it('resetPassword invalid token', async () => {
@@ -313,13 +354,13 @@ describe('AuthService.generateJwt', () => {
     // Call the method to test
     await AuthService.setPassword(token, password);
 
-    // Verify the database calls
-    expect(updateChain.update).toHaveBeenCalledWith({
-      password: password,
+    // Verify the database calls (password should be hashed)
+    expect(updateChain.update).toHaveBeenCalledWith(expect.objectContaining({
+      password: expect.any(String),
       invite_token: null,
       invite_token_expires: null,
       activated:true
-    });
+    }));
 
     expect(updateChain.where).toHaveBeenCalledWith({ id: user_id });
   });
